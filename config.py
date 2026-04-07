@@ -12,7 +12,7 @@ HYBRID_WORD_THRESHOLD = 20
 CONTINUATION_MAX_WINDOW = 8
 
 # Text windows
-PAGE_TEXT_WINDOW = 600          # Chars scanned for statement-type signals
+PAGE_TEXT_WINDOW = 2000         # Chars scanned for statement-type signals
 MAX_PAGE_TEXT_FOR_EXTRACT = 6000  # Truncate page text sent to Claude
 MAX_NOTE_TEXT = 4000            # Truncate note text sent to Claude
 

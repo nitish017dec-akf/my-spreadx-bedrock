@@ -68,26 +68,32 @@ def filter_financial_pages(
     for page in classified_pages:
         if page.classification == "scanned":
             continue
-        s_type = page.section_type
-        if not s_type or s_type == "other":
-            continue
 
-        if s_type == "notes":
-            # Try to extract note number from page text
-            match = (
-                re.search(r"^note\s+(\d+)", page.text_content, re.IGNORECASE | re.MULTILINE)
-                or re.search(r"^(\d+)\.\s+[A-Z]", page.text_content, re.MULTILINE)
-            )
-            if match:
-                num = int(match.group(1))
-                pages = note_page_map.get(num, [])
-                pages.append(page.page_number)
-                note_page_map[num] = pages
-            continue
+        # Collect primary and secondary section types for this page
+        types_to_process: list[str] = []
+        if page.section_type and page.section_type != "other":
+            types_to_process.append(page.section_type)
+        if page.secondary_section_type and page.secondary_section_type not in ("other", page.section_type):
+            types_to_process.append(page.secondary_section_type)
 
-        arr = selected.get(s_type, [])
-        arr.append(page.page_number)
-        selected[s_type] = arr
+        for s_type in types_to_process:
+            if s_type == "notes":
+                # Try to extract note number from page text
+                match = (
+                    re.search(r"^note\s+(\d+)", page.text_content, re.IGNORECASE | re.MULTILINE)
+                    or re.search(r"^(\d+)\.\s+[A-Z]", page.text_content, re.MULTILINE)
+                )
+                if match:
+                    num = int(match.group(1))
+                    pages = note_page_map.get(num, [])
+                    pages.append(page.page_number)
+                    note_page_map[num] = pages
+                continue
+
+            arr = selected.get(s_type, [])
+            if page.page_number not in arr:
+                arr.append(page.page_number)
+            selected[s_type] = arr
 
     # Expand each section with boundary-aware continuation
     for section, pages in list(selected.items()):
