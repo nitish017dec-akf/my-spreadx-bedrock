@@ -57,5 +57,5 @@ def parse_note_number(note_ref: str | None) -> int | None:
     """
     if not note_ref:
         return None
-    match = re.search(r"\d+", note_ref)
+    match = re.search(r"\d+", str(note_ref))
     return int(match.group(0)) if match else None
