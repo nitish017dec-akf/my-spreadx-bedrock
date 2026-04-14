@@ -79,6 +79,12 @@ def extract_note(
         raw = response["output"]["message"]["content"][0]["text"]
 
         clean = re.sub(r"```json|```", "", raw).strip()
+        
+        start_idx = clean.find('{')
+        end_idx = clean.rfind('}')
+        if start_idx != -1 and end_idx != -1:
+            clean = clean[start_idx:end_idx + 1]
+            
         parsed = json.loads(clean)
 
         # Build sub_tables from parsed data

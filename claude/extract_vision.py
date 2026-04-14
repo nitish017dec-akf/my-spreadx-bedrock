@@ -99,6 +99,11 @@ def extract_statement_from_image(
         raw = '{"rows": []}'
 
     clean = re.sub(r"```json|```", "", raw).strip()
+    
+    start_idx = clean.find('{')
+    end_idx = clean.rfind('}')
+    if start_idx != -1 and end_idx != -1:
+        clean = clean[start_idx:end_idx + 1]
 
     try:
         parsed = json.loads(clean)

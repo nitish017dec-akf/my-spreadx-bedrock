@@ -191,10 +191,17 @@ def extract_statement(
     raw = response["output"]["message"]["content"][0]["text"]
 
     clean = re.sub(r"```json|```", "", raw).strip()
+    
+    # Robustly find the JSON block in case the model is chatty
+    start_idx = clean.find('{')
+    end_idx = clean.rfind('}')
+    if start_idx != -1 and end_idx != -1:
+        clean = clean[start_idx:end_idx + 1]
 
     try:
         parsed = json.loads(clean)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e} | Raw text snippet: {raw[:200]}")
         return []
 
     rows = parsed.get("rows", [])
