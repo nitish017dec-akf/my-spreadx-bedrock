@@ -12,7 +12,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from config import CLAUDE_MODEL, PAGE_TEXT_WINDOW
+from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, PAGE_TEXT_WINDOW
 from models.page import (
     ClassifiedStatement,
     ScannedPageClassification,
@@ -202,9 +202,9 @@ def classify_scanned_pages(
 
     Ported from statement-classifier.ts classifyScannedPages() lines 159-216.
     """
-    import anthropic  # lazy import to avoid import error when API key is absent
+    import boto3
 
-    client = anthropic.Anthropic()
+    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
     results: dict[int, ScannedPageClassification] = {}
 
     fallback = ScannedPageClassification(
@@ -217,37 +217,27 @@ def classify_scanned_pages(
     )
 
     for page_num, buf in image_buffers.items():
-        import base64
-
-        b64 = base64.b64encode(buf).decode("ascii")
-
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=512,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": b64,
+        try:
+            response = client.converse(
+                modelId=BEDROCK_DEFAULT_MODEL_ID,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "image": {
+                                    "format": "png",
+                                    "source": {"bytes": buf}
+                                }
                             },
-                        },
-                        {"type": "text", "text": _SCANNED_PROMPT},
-                    ],
-                }
-            ],
-        )
-
-        raw = ""
-        for block in response.content:
-            if block.type == "text":
-                raw = block.text
-                break
-        if not raw:
+                            {"text": _SCANNED_PROMPT}
+                        ]
+                    }
+                ],
+                inferenceConfig={"maxTokens": 512},
+            )
+            raw = response["output"]["message"]["content"][0]["text"]
+        except Exception:
             raw = '{"pages": []}'
 
         clean = re.sub(r"```json|```", "", raw).strip()
