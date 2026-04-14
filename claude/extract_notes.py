@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import re
 
-import anthropic
+import boto3
 
-from config import CLAUDE_MODEL, MAX_NOTE_TEXT
+from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, MAX_NOTE_TEXT
 from models.extraction import NoteExtraction, NoteSubTable, NoteSubTableRow
 
 
@@ -69,18 +69,14 @@ def extract_note(
     )
 
     try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
+        client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+        response = client.converse(
+            modelId=BEDROCK_DEFAULT_MODEL_ID,
+            messages=[{"role": "user", "content": [{"text": prompt}]}],
+            inferenceConfig={"maxTokens": 4096},
         )
 
-        raw = ""
-        for block in response.content:
-            if block.type == "text":
-                raw = block.text
-                break
+        raw = response["output"]["message"]["content"][0]["text"]
 
         clean = re.sub(r"```json|```", "", raw).strip()
         parsed = json.loads(clean)

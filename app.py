@@ -19,13 +19,7 @@ import json
 import pandas as pd
 import streamlit as st
 
-# Load ANTHROPIC_API_KEY: Streamlit secrets (Cloud + local) -> env var fallback
-try:
-    _api_key = st.secrets["ANTHROPIC_API_KEY"]
-    os.environ["ANTHROPIC_API_KEY"] = _api_key
-except (KeyError, FileNotFoundError):
-    # Fall back to environment variable (e.g. set in shell or .env via pytest)
-    pass
+# Bedrock uses standard boto3 credential resolution (e.g. AWS_ACCESS_KEY_ID via env, or ~/.aws)
 
 from export.xlsx_export import build_raw_extraction_xlsx
 from pipeline.orchestrator import run_pipeline

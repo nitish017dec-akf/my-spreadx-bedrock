@@ -1,7 +1,10 @@
 """Shared configuration constants for the extraction pipeline."""
 
-# Claude AI model used for all API calls
-CLAUDE_MODEL = "claude-sonnet-4-6"
+import os
+
+# AWS & S3 Bedrock configs
+AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
+BEDROCK_DEFAULT_MODEL_ID = os.getenv("BEDROCK_DEFAULT_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
 
 # Page classification thresholds (from page-classifier.ts)
 DIGITAL_WORD_THRESHOLD = 80

@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import re
 
-import anthropic
+import boto3
 
-from config import CLAUDE_MODEL, MAX_PAGE_TEXT_FOR_EXTRACT, TEXT_EXTRACT_MAX_TOKENS
+from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, MAX_PAGE_TEXT_FOR_EXTRACT, TEXT_EXTRACT_MAX_TOKENS
 from pdf.statement_classifier import STATEMENT_SIGNALS, normalize_heading_text
 
 
@@ -180,19 +180,15 @@ def extract_statement(
         page_text=page_text[:limit],
     )
 
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=TEXT_EXTRACT_MAX_TOKENS,
-        system="You are a financial data extraction engine. You MUST return ONLY valid JSON with a top-level 'rows' array. No other keys at the top level. No markdown fences. No commentary.",
-        messages=[{"role": "user", "content": prompt}],
+    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    response = client.converse(
+        modelId=BEDROCK_DEFAULT_MODEL_ID,
+        system=[{"text": "You are a financial data extraction engine. You MUST return ONLY valid JSON with a top-level 'rows' array. No other keys at the top level. No markdown fences. No commentary."}],
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": TEXT_EXTRACT_MAX_TOKENS},
     )
 
-    raw = ""
-    for block in response.content:
-        if block.type == "text":
-            raw = block.text
-            break
+    raw = response["output"]["message"]["content"][0]["text"]
 
     clean = re.sub(r"```json|```", "", raw).strip()
 

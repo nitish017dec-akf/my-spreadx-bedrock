@@ -8,13 +8,12 @@ Ported from: financial-spreadx/lib/claude/extract-vision.ts
 
 from __future__ import annotations
 
-import base64
 import json
 import re
 
-import anthropic
+import boto3
 
-from config import CLAUDE_MODEL, VISION_EXTRACT_MAX_TOKENS
+from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, VISION_EXTRACT_MAX_TOKENS
 
 
 _VISION_PROMPT_TEMPLATE = """This is page {page_number} of a financial statement ({statement_type_display}, template: {template_type}).
@@ -69,42 +68,34 @@ def extract_statement_from_image(
         List of dicts with keys: raw_label, raw_values, section_path,
         indentation_level, is_subtotal, note_ref.
     """
-    b64 = base64.b64encode(image_buffer).decode("ascii")
-
     prompt = _VISION_PROMPT_TEMPLATE.format(
         page_number=page_number,
         statement_type_display=statement_type.replace("_", " "),
         template_type=template_type,
     )
 
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=VISION_EXTRACT_MAX_TOKENS,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": b64,
+    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    try:
+        response = client.converse(
+            modelId=BEDROCK_DEFAULT_MODEL_ID,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "image": {
+                                "format": "png",
+                                "source": {"bytes": image_buffer}
+                            }
                         },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
-    )
-
-    raw = ""
-    for block in response.content:
-        if block.type == "text":
-            raw = block.text
-            break
-    if not raw:
+                        {"text": prompt}
+                    ]
+                }
+            ],
+            inferenceConfig={"maxTokens": VISION_EXTRACT_MAX_TOKENS},
+        )
+        raw = response["output"]["message"]["content"][0]["text"]
+    except Exception:
         raw = '{"rows": []}'
 
     clean = re.sub(r"```json|```", "", raw).strip()
