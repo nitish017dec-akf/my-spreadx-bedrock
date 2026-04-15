@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Callable
 
+from config import logger
 from claude.extract import extract_statement, segment_page_text
 from claude.extract_notes import extract_note
 from claude.extract_vision import extract_statement_from_image
@@ -49,6 +50,7 @@ class PipelineResult:
 
 
 def _notify(cb: ProgressCallback | None, stage: str, detail: str, pct: float) -> None:
+    logger.info(f"[{stage}] {detail} ({pct:.0%})")
     if cb:
         cb(stage, detail, pct)
 

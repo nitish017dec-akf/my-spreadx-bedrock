@@ -2,7 +2,19 @@
 
 import os
 import boto3
+import logging
 from botocore.config import Config
+
+# --- Configure Logging ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s",
+    handlers=[
+        logging.FileHandler("spreadx_pipeline.log", encoding="utf-8"), # Save to file
+        logging.StreamHandler() # Also print to terminal
+    ]
+)
+logger = logging.getLogger("spreadx")
 
 # AWS & S3 Bedrock configs
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
