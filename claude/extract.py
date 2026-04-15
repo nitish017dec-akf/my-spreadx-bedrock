@@ -12,7 +12,7 @@ import re
 
 import boto3
 
-from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, MAX_PAGE_TEXT_FOR_EXTRACT, TEXT_EXTRACT_MAX_TOKENS
+from config import BEDROCK_DEFAULT_MODEL_ID, MAX_PAGE_TEXT_FOR_EXTRACT, TEXT_EXTRACT_MAX_TOKENS, get_bedrock_client
 from pdf.statement_classifier import STATEMENT_SIGNALS, normalize_heading_text
 
 
@@ -180,7 +180,7 @@ def extract_statement(
         page_text=page_text[:limit],
     )
 
-    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    client = get_bedrock_client()
     response = client.converse(
         modelId=BEDROCK_DEFAULT_MODEL_ID,
         system=[{"text": "You are a financial data extraction engine. You MUST return ONLY valid JSON with a top-level 'rows' array. No other keys at the top level. No markdown fences. No commentary."}],

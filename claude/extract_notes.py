@@ -12,7 +12,7 @@ import re
 
 import boto3
 
-from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, MAX_NOTE_TEXT
+from config import BEDROCK_DEFAULT_MODEL_ID, MAX_NOTE_TEXT, get_bedrock_client
 from models.extraction import NoteExtraction, NoteSubTable, NoteSubTableRow
 
 
@@ -69,7 +69,7 @@ def extract_note(
     )
 
     try:
-        client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+        client = get_bedrock_client()
         response = client.converse(
             modelId=BEDROCK_DEFAULT_MODEL_ID,
             messages=[{"role": "user", "content": [{"text": prompt}]}],

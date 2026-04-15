@@ -12,7 +12,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, PAGE_TEXT_WINDOW
+from config import BEDROCK_DEFAULT_MODEL_ID, PAGE_TEXT_WINDOW, get_bedrock_client
 from models.page import (
     ClassifiedStatement,
     ScannedPageClassification,
@@ -202,9 +202,7 @@ def classify_scanned_pages(
 
     Ported from statement-classifier.ts classifyScannedPages() lines 159-216.
     """
-    import boto3
-
-    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    client = get_bedrock_client()
     results: dict[int, ScannedPageClassification] = {}
 
     fallback = ScannedPageClassification(

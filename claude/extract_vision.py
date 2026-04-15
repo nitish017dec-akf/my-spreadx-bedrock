@@ -13,7 +13,7 @@ import re
 
 import boto3
 
-from config import AWS_REGION, BEDROCK_DEFAULT_MODEL_ID, VISION_EXTRACT_MAX_TOKENS
+from config import BEDROCK_DEFAULT_MODEL_ID, VISION_EXTRACT_MAX_TOKENS, get_bedrock_client
 
 
 _VISION_PROMPT_TEMPLATE = """This is page {page_number} of a financial statement ({statement_type_display}, template: {template_type}).
@@ -74,7 +74,7 @@ def extract_statement_from_image(
         template_type=template_type,
     )
 
-    client = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    client = get_bedrock_client()
     try:
         response = client.converse(
             modelId=BEDROCK_DEFAULT_MODEL_ID,
