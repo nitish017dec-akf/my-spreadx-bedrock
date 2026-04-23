@@ -48,6 +48,19 @@ def rotate_image_90(image_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def rotate_image(image_bytes: bytes, angle: int) -> bytes:
+    """Rotate image by exact angle (90, 180, or 270 degrees). Used for multi-angle rotation retries."""
+    import io
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_bytes))
+    img = img.rotate(angle, expand=True)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def detect_and_correct_rotation(
     image_bytes: bytes,
     page_rect_width: float,
@@ -66,14 +79,14 @@ def detect_and_correct_rotation(
 
     from PIL import Image
 
-    # Only correct portrait pages
-    if page_rect_width >= page_rect_height:
-        return image_bytes
-
     img = Image.open(io.BytesIO(image_bytes))
     bbox = img.getbbox()
     if not bbox:
         return image_bytes  # Blank image — nothing to rotate
+
+    # Only correct portrait pages — landscape pages are already rasterized correctly by PyMuPDF
+    if page_rect_width >= page_rect_height:
+        return image_bytes
 
     content_width = bbox[2] - bbox[0]
     content_height = bbox[3] - bbox[1]

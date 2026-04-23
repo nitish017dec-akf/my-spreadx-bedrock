@@ -54,11 +54,11 @@ def segment_page_text(page_text: str, target_statement_type: str) -> str:
 
     Headings must appear at the start of a line to avoid matching
     inline references or table-of-contents entries.  Segments shorter
-    than _MIN_SEGMENT_CHARS are treated as false matches and the full
-    text is returned instead.
+    than _MIN_SEGMENT_CHARS are treated as false matches and "" is
+    returned (empty = skip this page for this statement type).
 
-    If no heading boundary for the target type is found, returns the
-    full text unchanged (safe fallback).
+    If no heading of any type is found, returns the full text (safe
+    fallback — page is likely a pure continuation with no heading).
     """
     normalized = normalize_heading_text(page_text)
 
@@ -109,11 +109,19 @@ def segment_page_text(page_text: str, target_statement_type: str) -> str:
             # Guard against tiny segments from TOC/footer false matches
             if len(segment) >= _MIN_SEGMENT_CHARS:
                 return segment
-            # Segment too small — likely a false match; return full text
-            return page_text
+            # Segment too small — likely a TOC/footer false match.
+            # Return "" rather than full text to avoid sending foreign-statement
+            # content to Claude when the real section boundary is elsewhere.
+            return ""
 
-    # Target type not found in headings — return full text
-    return page_text
+    # Target type not found, but other statement headings are present on this page.
+    # Return only the text before the first foreign heading — may contain unlabeled
+    # continuation rows that precede the other section. If too small, skip entirely.
+    first_other_pos = matches[0][0]
+    pre_heading = page_text[:first_other_pos]
+    if len(pre_heading) >= _MIN_SEGMENT_CHARS:
+        return pre_heading
+    return ""
 
 
 _EXTRACT_PROMPT_TEMPLATE = """You are a financial data extraction engine. Extract ALL financial line items from this {statement_type_display} page.
@@ -134,6 +142,14 @@ Rules:
 10. Values with spaces inside parentheses like ( 5,748) are negative: -5748
 11. Percentage columns may appear alongside value columns — extract monetary values only
 12. Note references may appear in unusual formats like "(Note 6 -32 )" — extract "Note 6" as note_ref
+13. CRITICAL — Stay within the {statement_type_display}: Extract ONLY rows that belong to the {statement_type_display}. Only skip rows when a DIFFERENT statement type has a clearly visible section heading on this page (e.g., you see "STATEMENT OF CHANGES IN EQUITY" followed by equity rows while extracting the income statement — skip those equity rows). When uncertain whether a row belongs here, INCLUDE it rather than skip.
+14. A table column with no year or period header is the row description/label column — treat its text as raw_label, not as a numeric data value.
+15. Statement type characteristics — use these to distinguish types when headings are absent:
+    - income_statement: Revenue/Sales, Operating expenses (wages, depreciation, interest expense), Income tax, Net income/loss, Earnings per share, Income from continuing operations
+    - balance_sheet: Assets (cash, receivables, inventories, investments, property/plant/equipment, goodwill), Liabilities (payables, short/long-term debt, provisions), Shareholders' equity total
+    - cash_flow: Cash flows from/used in operating/investing/financing activities, Net increase/decrease in cash, Opening/closing cash balances
+    - equity_statement: Movements in share capital, retained earnings, dividends paid, other comprehensive income, total equity reconciliation across multiple columns
+16. If a row has numeric values but no visible label text (blank label area in the document), do NOT return empty raw_label. Infer the most likely label from context: the final row after all income items = "Net Income" or "Net Loss"; the final row in a balance sheet = "Total Liabilities and Equity"; a row between sections with no heading = use surrounding context. Prefix inferred labels with "[inferred]" e.g. raw_label: "[inferred] Net Income".
 
 Return ONLY valid JSON matching this schema:
 {{

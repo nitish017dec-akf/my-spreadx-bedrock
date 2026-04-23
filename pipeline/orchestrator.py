@@ -20,7 +20,7 @@ from models.page import ClassifiedPage, FilterResult
 from pdf.column_classifier import classify_column_headers
 from pdf.page_classifier import classify_pdf_pages, summarize_classifications
 from pdf.page_filter import filter_financial_pages
-from pdf.page_rasterizer import detect_and_correct_rotation, rasterize_page, rasterize_pages, rotate_image_90
+from pdf.page_rasterizer import detect_and_correct_rotation, rasterize_page, rasterize_pages, rotate_image, rotate_image_90
 from pdf.scope_detector import detect_scope
 from pdf.statement_classifier import (
     classify_scanned_pages,
@@ -45,6 +45,7 @@ class PipelineResult:
     filter_result: FilterResult = field(default_factory=FilterResult)
     extracted_rows: list[dict] = field(default_factory=list)
     extracted_notes: list[NoteExtraction] = field(default_factory=list)
+    failed_pages: list[dict] = field(default_factory=list)
     template_type: str = "T0_unknown"
     summary: dict = field(default_factory=dict)
 
@@ -241,8 +242,9 @@ def run_pipeline(
                         )
                         rows.extend(vision_rows)
                         ocr_page_nums.add(dp.page_number)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Vision fallback failed for digital page {dp.page_number}: {e}")
+                        result.failed_pages.append({"page": dp.page_number, "stage": "digital_vision_fallback", "error": str(e)})
 
             # Enrich rows with metadata (use first digital page for page number)
             first_dp = digital_pages[0].page_number
@@ -292,16 +294,20 @@ def run_pipeline(
                 )
                 rows = extract_statement_from_image(png, stmt_type, template_type, page_num)
 
-                # Retry on 0 rows: try rotated image (catches sideways tables
-                # where content fills the page and bbox detection doesn't trigger)
-                if not rows:
+                # Retry on 0 rows or garbled micro-extractions: sweep angles at higher DPI
+                if not rows or len(rows) < 3:
                     retry_dpi = max(effective_dpi, 3.0)
                     retry_png = rasterize_page(pdf_bytes, page_num, retry_dpi)
-                    retry_png = rotate_image_90(retry_png)
-                    rows = extract_statement_from_image(retry_png, stmt_type, template_type, page_num)
+                    for _angle in (0, 90, 180, 270):
+                        rotated = rotate_image(retry_png, _angle) if _angle else retry_png
+                        rows = extract_statement_from_image(rotated, stmt_type, template_type, page_num)
+                        if rows and len(rows) >= 3:
+                            break
 
                 ocr_page_nums.add(page_num)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"All extraction paths failed for scanned page {page_num}: {e}")
+                result.failed_pages.append({"page": page_num, "stage": "scanned_all_paths", "error": str(e)})
                 # Fallback: try text extraction if vision fails
                 if page_data.text_content:
                     rows = extract_statement(page_data.text_content, stmt_type, template_type)
@@ -324,6 +330,26 @@ def run_pipeline(
                 r["page"] = page_num
                 r["column_metadata"] = col_meta_s
                 all_rows.append(r)
+
+    # Remove exact duplicates produced by dual-type scanned pages being extracted twice.
+    # section_path and indentation_level are included so legitimately repeated labels
+    # (e.g., "Net income" appearing both at the P&L bottom and in the attribution section)
+    # are NOT removed — they occupy structurally distinct positions.
+    seen_keys: set[tuple] = set()
+    deduped_rows: list[dict] = []
+    for r in all_rows:
+        key = (
+            r.get("raw_label", "").strip(),
+            str(sorted(r.get("raw_values", {}).items())),
+            r.get("statement_type", ""),
+            r.get("page", 0),
+            str(r.get("section_path", [])),
+            r.get("indentation_level", 0),
+        )
+        if key not in seen_keys:
+            seen_keys.add(key)
+            deduped_rows.append(r)
+    all_rows = deduped_rows
 
     result.extracted_rows = all_rows
     _notify(progress_callback, "S5", f"{len(all_rows)} rows extracted", 0.80)
@@ -372,6 +398,7 @@ def run_pipeline(
         "total_notes": len(notes),
         "ocr_pages": len(ocr_page_nums),
         "template_type": template_type,
+        "failed_pages": len(result.failed_pages),
     }
 
     _notify(progress_callback, "Done", "Pipeline complete", 1.0)

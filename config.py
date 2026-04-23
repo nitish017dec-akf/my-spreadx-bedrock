@@ -18,7 +18,7 @@ logger = logging.getLogger("spreadx")
 
 # AWS & S3 Bedrock configs
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
-BEDROCK_DEFAULT_MODEL_ID = os.getenv("BEDROCK_DEFAULT_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+BEDROCK_DEFAULT_MODEL_ID = os.getenv("BEDROCK_DEFAULT_MODEL_ID", "global.anthropic.claude-sonnet-4-6")
 
 def get_bedrock_client():
     # Long 15-minute timeout config to prevent crashes on dense pages

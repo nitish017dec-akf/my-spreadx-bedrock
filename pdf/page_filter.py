@@ -15,10 +15,33 @@ from config import CONTINUATION_MAX_WINDOW
 from models.page import ClassifiedPage, FilterResult
 
 
+def _page_has_foreign_heading(page: ClassifiedPage, section_type: str) -> bool:
+    """Return True if the page text contains a statement heading for a type
+    different from section_type (and not notes/other).
+
+    Used to stop continuation expansion before a page that starts a new
+    statement even when S2b classified it as 'other' (e.g., because the
+    heading appeared after a long preamble that pushed it past PAGE_TEXT_WINDOW).
+    """
+    if not page.text_content:
+        return False
+    from pdf.statement_classifier import STATEMENT_SIGNALS, normalize_heading_text
+    # Scan full text — heading may appear after the PAGE_TEXT_WINDOW used by S2b,
+    # which would leave the page classified as "other" even though it starts a new section.
+    window = normalize_heading_text(page.text_content)
+    for signal in STATEMENT_SIGNALS:
+        if signal.type in ("notes", "other", section_type):
+            continue
+        if signal.pattern.search(window):
+            return True
+    return False
+
+
 def expand_with_continuation_pages(
     detected_pages: list[int],
     all_pages: list[ClassifiedPage],
     max_window: int = CONTINUATION_MAX_WINDOW,
+    section_type: str = "",
 ) -> list[int]:
     """Expand a section's page list with continuation pages.
 
@@ -26,6 +49,8 @@ def expand_with_continuation_pages(
       1. End of PDF (no next page)
       2. Scanned page encountered
       3. Next page has a different, assigned section_type (boundary detection)
+      4. Next page text contains a heading for a different statement type
+         (catches pages misclassified as 'other' that actually start a new section)
 
     Ported from page-filter.ts expandWithContinuationPages() lines 77-101.
     """
@@ -46,6 +71,10 @@ def expand_with_continuation_pages(
             # Boundary detection: stop if next page has a different assigned section type
             next_type = nxt.section_type
             if next_type and next_type not in ("other", "notes"):
+                break
+            # Defense-in-depth: stop if page text contains a foreign statement heading
+            # (catches pages where S2b returned 'other' due to long preamble)
+            if section_type and _page_has_foreign_heading(nxt, section_type):
                 break
             result.add(next_num)
 
@@ -98,7 +127,7 @@ def filter_financial_pages(
     # Expand each section with boundary-aware continuation
     for section, pages in list(selected.items()):
         selected[section] = expand_with_continuation_pages(
-            pages, classified_pages, CONTINUATION_MAX_WINDOW
+            pages, classified_pages, CONTINUATION_MAX_WINDOW, section_type=section
         )
 
     all_selected: set[int] = set()

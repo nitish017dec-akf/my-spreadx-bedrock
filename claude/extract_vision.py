@@ -20,9 +20,15 @@ _VISION_PROMPT_TEMPLATE = """This is page {page_number} of a financial statement
 Extract all financial line items as structured rows.
 
 IMPORTANT layout guidance:
-- This page may use a DUAL-COLUMN layout (e.g., assets on the left and liabilities
-  on the right, or operating activities on the left and investing/financing on the right).
-  Extract ALL items from EVERY column — do not stop after the first column.
+- This page may use a DUAL-COLUMN layout within the {statement_type_display} (e.g.,
+  assets on the left and liabilities on the right within a balance sheet, or operating /
+  investing / financing sections in a cash flow statement).
+  Extract ALL items from EVERY column that belongs to the {statement_type_display} —
+  do not stop after the first column of this statement type.
+- CRITICAL: If the page image shows MULTIPLE DIFFERENT financial statement sections
+  (e.g., a balance sheet section AND an equity section side-by-side), extract ONLY from
+  the {statement_type_display} section. Only skip rows when a different statement type has
+  a clearly visible heading on the page. When uncertain, INCLUDE the row.
 - If the page has a WIDE TABLE with many columns, read each column header carefully
   and map values to the correct year/period.
 - Read the ENTIRE page from top to bottom, left to right.
@@ -47,7 +53,15 @@ Rules:
 - Negative values use negative numbers, not parentheses
 - Values in parentheses like (1,234) should be -1234
 - Return only JSON, no markdown or commentary
-- If the page does not contain financial statement data, return {{"rows": []}}"""
+- If the page does not contain financial statement data, return {{"rows": []}}
+- A column with no year or period header is the row description/label column — use its text as raw_label, not as a numeric value.
+- Statement type row characteristics (use when headings are absent):
+  income_statement: Revenue, Operating expenses, Net income, Income from continuing operations, EPS
+  balance_sheet: Assets, Liabilities, Shareholders' equity total
+  cash_flow: Cash from/used in operating/investing/financing, Net change in cash
+  equity_statement: Share capital movements, retained earnings changes, dividends, total equity
+- If a row has numeric values but no visible label, infer the label from context (e.g. "[inferred] Net Income") rather than returning empty raw_label.
+- Read each digit in every number carefully. Do not round. 903 ≠ 900."""
 
 
 def extract_statement_from_image(
